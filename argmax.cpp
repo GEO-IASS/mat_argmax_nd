@@ -25,7 +25,11 @@ TODO:
 
 #define dualsel(tin,tout) ((tin)+(tout)*20)
 
-static int forcemode; // 
+
+//argmaxmodes_names = { 'auto','alongnosimd','parsimd','parnosimd','alongsimd','matlabmex','matlabreal'};
+enum RunningMode { ModeAuto,ModeAlongNoSimd,ModeParSimd,ModeParNoSimd,ModeAlongSimd,MoteMatlabMEX,ModeMatlabREAL};
+
+static int forcemode = ModeAuto; // 
 
 template <class T>
 class strided_ptr
@@ -351,7 +355,7 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
         //mexPrintf("argmax1: Asize=%d Ksize=%d Kstride=%d steps=%d,remainder=%d\n",Asize,Ksize,Kstride,Asize/Q::csize,Asize % Q::csize);
     #endif
         
-    if(forcemode == 1)
+    if(forcemode == ModeAlongNoSimd)
     {
         for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
         {
@@ -363,7 +367,7 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
         }        
         return;
     }
-    else if(forcemode == 2)
+    else if(forcemode == ModeAlongSimd)
     {
         for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
         {
@@ -377,14 +381,14 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
     }
     #ifdef __AVX2__
 
-    if(forcemode == 3 || (Astride == 1  && Q::csize > 1 && Asize >= Q::csize)) // && Kstride > 128 ) // && Asize >= Q::csize) // at least 1 special iteration
+    if(forcemode == ModeParSimd || (Astride == 1  && Q::csize > 1 && Asize >= Q::csize)) // && Kstride > 128 ) // && Asize >= Q::csize) // at least 1 special iteration
     {
         for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
         {
             argmax1_hor(p000,Asize,Ksize,Kstride,po,S(),iB);  // empty implementation for the other
         }    
     }
-    else if(forcemode == 4)
+    else if(forcemode == ModeParNoSimd)
     {
         for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
         {
@@ -396,6 +400,7 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
 //    #endif
         
     {
+        // Auto
         for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
         {
             const Tin * p00 = p000; // begin of the submatrix
@@ -415,7 +420,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if(nrhs == 1 && nlhs == 0)
     {
         forcemode = *(double*)mxGetPr(prhs[0]);
-        mexPrintf("argmax forcemode %d (0=default, 1=nonsimd, 2=always along, 3=always par\n",forcemode);
+        mexPrintf("argmax forcemode %d (0='auto',1='alongnosimd',2='parsimd',3='parnosimd',4='alongsimd',5='matlab') \n",forcemode);
         return;
     }
 	// indices
@@ -453,6 +458,45 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgTxt("invalid dimension argument: 0..ndims(x)\n");
         return;
 	}
+       
+    if(forcemode == MoteMatlabMEX)
+    {
+        if(dim != 0)
+        {
+            mxArray *mrhs[3], *mlhs[2];
+            mrhs[0] = mxDuplicateArray(prhs[0]); // input
+            mrhs[1] = mxCreateDoubleMatrix( 0, 0, mxREAL ); // []
+            mrhs[2] = mxCreateDoubleScalar(dim); // dim
+            mexCallMATLAB(2, mlhs, 3, mrhs, "max"); // [~,y] = max(y,[],dim)
+            plhs[0] = mxDuplicateArray(mlhs[1]);
+            mxDestroyArray(mlhs[0]);
+            mxDestroyArray(mlhs[1]);
+            mxDestroyArray(mrhs[0]);
+            mxDestroyArray(mrhs[1]);
+            mxDestroyArray(mrhs[2]);
+        }
+        else
+        {
+            mxArray *mrhs1[3], *mlhs1[1];
+            mxArray *mrhs2[1], *mlhs2[2];
+            // [~,y] = max(reshape(x,1,[]))
+            mrhs1[0] = mxDuplicateArray(prhs[0]); // input duplication
+            mrhs1[1] = mxCreateDoubleScalar(1); // 1
+            mrhs1[2] = mxCreateDoubleMatrix( 0, 0, mxREAL ); // []
+            mexCallMATLAB(1, mlhs1, 3, mrhs1, "reshape"); 
+            mxDestroyArray(mrhs1[0]);
+            mxDestroyArray(mrhs1[1]);
+            mxDestroyArray(mrhs1[2]);
+            mrhs2[0] = mlhs1[0]; // propagate output as input of max
+            mexCallMATLAB(2, mlhs2, 1, mrhs2, "max");  
+            plhs[0] = mlhs2[1]; // propagate output to final output
+            mxDestroyArray(mlhs2[0]); // the output not used
+            mxDestroyArray(mrhs2[0]); // the input
+        }
+        return;
+    }
+    else if(forcemode == ModeMatlabREAL)
+        return;
     
 	if(ndims == 1 || (dim > 0 && dim < ndims && dimi[dim] == 1)) // singular dimension
 	{
@@ -483,6 +527,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         }
 		return;
 	}
+    
+    
+    
 	mwSize dimo[10];
 	memset(dimo,0,sizeof(dimo));
 	if(ndims > sizeof(dimo)/sizeof(dimo[0]))

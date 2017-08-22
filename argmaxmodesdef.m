@@ -1,5 +1,5 @@
 
-argmaxmodes_names = { 'auto','alongnosimd','parsimd','parnosimd','alongsimd','matlab','matlab2'};
+argmaxmodes_names = { 'auto','alongnosimd','parsimd','parnosimd','alongsimd','matlabmex','matlabreal'};
 
 argmaxmodes = [];
 for I=1:length(argmaxmodes_names)

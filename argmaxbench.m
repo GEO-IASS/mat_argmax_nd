@@ -3,18 +3,20 @@
 % mecomp < 0  matlab
 function [my,t] = argmaxbench(x,dim,to,mecomp)
 
-if mecomp == 5 || mecomp == 6
-    tic;
+tic
+if mecomp == 6
     if dim == 0
         [~,mat] = max(x(:));
     else
         [~,mat] = max(x,[],dim);
     end
     my = cast(mat,'like',to);
-    t = toc;
 else
     argmax(mecomp);
-    tic;
     my = argmax(x,dim,to);
-    t = toc;
+    % cast needed due to our implementation
+    if mecomp == 5
+        my = cast(my,'like',to);
+    end
 end  
+t = toc;

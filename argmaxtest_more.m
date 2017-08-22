@@ -14,7 +14,10 @@ dt = tme-tmat
 r
 %assert(x == r)
 %%
-argmax(0);
+argmaxmodesdef
+nmodes = {'auto','matlabmex'};
+modes = cellfun(@(x) argmaxmodes.(x), nmodes);
+
 %a = floor(10*rand([2,4,8,16]));
 a = floor(10*rand([1,128,1024]));
 tt = {double(0),single(0),uint8(0),int8(0),uint16(0),int16(0),int32(0),uint32(0)};
@@ -30,7 +33,7 @@ for I=1:length(tt)
         aa = cast(a,'like',tt{I});
         for K=0:ndims(a)
             {class(aa),K}
-            [c0,b0,mb0,dt0,tx,t1,t2] = argmaxcomp(aa,K,to{J});
+            [c0,b0,mb0,dt0,tx,t1,t2] = argmaxcomp(aa,K,to{J},[modes(1),modes(2)]);
             outputc(I,J,K+1) = c0;
             outputdt(I,J,K+1) = dt0;
             outputt_my_over_mat(I,J,K+1) = tx;
