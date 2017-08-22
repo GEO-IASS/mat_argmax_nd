@@ -18,9 +18,10 @@ Depending on the compilation flags the MEX function uses AVX512/AVX2
 
 ## Status
 
-* int8 and int16 have issues in the collection
-* AVX512 works
-* with large sizes the MEX seems much slower
+* int8 and int16 have issues in the recombination of result in parallel mode
+* when the result is ones(size(x)) the std::fill_n is slower
+* with large sizes seems much slower => mex overhead?
+* AVX512 works tested with sed by Intel
 
 # Implementation #
 
@@ -67,7 +68,7 @@ We have to decide the algorithm based on the task (Da Dk Db), the type T, and th
 * Da=1 favor along
 * Da>1 favor parallel
 
-TODO: plus 8bit and 16bit gather missing at SIMD instruction level.
+Note: 8bit and 16bit gather missing at SIMD instruction level.
 
 ## Results against Matlab ##
 
@@ -79,7 +80,7 @@ Example: 1 128 1024
 * Dimension 2 alongsimd and parsimd seems similar (stride 1/128)
 * Dimension 3 alongsimd wins (stride 128/1024)
 
-Example: 128 32 1024
+Example: 128 32 1024. All slower
 * Dimension 0 is (1/4194304/1/1)
 * Dimension 1 is (1/128/1/32768)
 * Dimension 2 is (128/32/128/1024)
@@ -99,26 +100,13 @@ SSE...AVX2 for using SIMD in particular:
 - int16: simd_i16_8 simd_i16_16
 - int8:  simd_i8_16 simd_i8_32
 
-I have optimized:
+Optimized
 
 - gathering
 - index propagation
 
-Support for AVX-512 (AVX-512F) will bring another doubling of parallelism.
-
-# TODO Partially outdated # 
-
-## Horizontal Opt ##
-(1) In progress: Astride=1 Kstride > something then we can proceed along A in blocks of size C moving along K: same number of operations more cache friendly
-
-simd_x_a provides what is needed for this horizontal behavior. 
-
-## Array of double ##
-
-simd_d_4_a<N> is not complete (e.g. gather)
-
-## AVX512 ##
-(3) Test for AVX512 (Skylake and X)
+# AVX512 #
+Test for AVX512 (Skylake and X)
 
 https://software.intel.com/en-us/node/524490
 g++ --std=c++11 -mavx2 -mfma -mf16c -mavx512vl -mavx512f  -DNOMATLAB nomat_test.cpp 
@@ -135,6 +123,7 @@ Histogram of opcodes:
 	
 	sed -mix -- ./a.out 
 
+# Ideas #
 ## Picking the Correct Type ##
 (2)
 Currently for a given type only the maximum size is picked for the compiled hardware (e.g. int32 8 items) downgrading to scalar for smaller sizes. This means that we are not covering some optimizations. E.g. a dimension of 6 can be managed as simg_i32_4 plus 2 leftovers.
