@@ -27,9 +27,9 @@ TODO:
 
 
 //argmaxmodes_names = { 'auto','alongnosimd','parsimd','parnosimd','alongsimd','matlabmex','matlabreal'};
-enum RunningMode { ModeAuto,ModeAlongNoSimd,ModeParSimd,ModeParNoSimd,ModeAlongSimd,MoteMatlabMEX,ModeMatlabREAL};
+enum RunningMode { ModeAuto,ModeAlongNoSimd,ModeParSimd,ModeParNoSimd,ModeAlongSimd,ModeMatlabMEX,ModeMatlabREAL};
 
-static int forcemode = ModeAuto; // 
+static RunningMode forcemode = ModeAuto; // 
 
 template <class T>
 class strided_ptr
@@ -258,10 +258,67 @@ void argmax1g(const Tin * p0, int Ksize, int Kstride, Tout * po, NoSimdMode)
 }
 
 
-// never called
+// Astride == 1
 template <class Tin, class Tout> 
-void argmax1_hor(const Tin*p000,int Asize,int Ksize,int Kstride,Tout * po,NoSimdMode, int ri)
+void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride,Tout * po,NoSimdMode, const int ri)
 {
+    const int Astride = 1;
+    const int N = 16;
+    std::array<Tin,N> horbuf;
+    std::array<int,N> horbufi;
+    const int steps = Asize/N; // truncation
+    const int remainder = Asize % N;
+    
+    for (int n = 0; n < steps; n++, p00 += N*Astride)
+    {
+        const Tin * p0 = p00;        
+        for(int i = 0; i < N; i++) // along A
+        {
+            horbuf[i] = p0[i*Astride];
+            horbufi[i] = 0; // first
+        }
+        p0 += Kstride; // next
+        for(int iK = 1; iK < Ksize; iK++, p0 += Kstride)
+        {
+            for(int i = 0; i < N; i++)
+            {
+                auto v = p0[i*Astride];
+                if(v > horbuf[i])
+                {
+                    horbuf[i] = v;
+                    horbufi[i] = iK;
+                }
+            }
+        }      
+        for(int i = 0; i < N; i++)
+            *po++ = horbufi[i];
+    }
+    
+    // a batch < N
+    if(remainder > 0)
+    {
+        const Tin * p0 = p00;        
+        for(int i = 0; i < remainder; i++) // along A
+        {
+            horbuf[i] = p0[i*Astride];
+            horbufi[i] = 0; // first
+        }
+        p0 += Kstride; // next
+        for(int iK = 1; iK < Ksize; iK++, p0 += Kstride)
+        {
+            for(int i = 0; i < remainder; i++)
+            {
+                auto v = p0[i*Astride];
+                if(v > horbuf[i])
+                {
+                    horbuf[i] = v;
+                    horbufi[i] = iK;
+                }
+            }
+        }        
+        for(int i = 0; i < remainder; i++)
+            *po++ = horbufi[i];
+    }   
 }
 
 template <class Tin, class Tout> 
@@ -270,9 +327,8 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
     typedef typename simdgen<Tin>::type Q;
     typedef typename simdgen<Tin>::simdmarker S;
     const int steps = Asize/Q::csize; // truncation
-    const int remainder = Asize-Q::csize*steps;
-    typename Q::indextype::type tmpout[Q::indextype::csize]; // Q::indextype::csize >= Q::csize
-    
+    const int remainder = Asize%Q::csize;
+    typename Q::indextype::type tmpout[Q::indextype::csize]; // Q::indextype::csize >= Q::csize    
         
     // split Asize in slices of Q::csize
     for (int n = 0; n < steps; n++, p00 += Q::csize) // Astride*Q::csize
@@ -354,73 +410,99 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
     #ifndef NOMATLAB
         //mexPrintf("argmax1: Asize=%d Ksize=%d Kstride=%d steps=%d,remainder=%d\n",Asize,Ksize,Kstride,Asize/Q::csize,Asize % Q::csize);
     #endif
+    switch(forcemode)
+    {
+        case ModeAuto:
+            if(Kstride > 1 && Asize > 1)
+            {
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
+                {
+                    argmax1_hor(p000,Asize,Ksize,Kstride,po,S(),iB);  // empty implementation for the other
+                }                    
+            }
+            else
+            {
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+                {
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1(p00,Ksize,Kstride,po++,S());
+                    }
+                }                       
+            }
+            break;
+        case ModeAlongNoSimd:
+            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+            {
+                const Tin * p00 = p000; // begin of the submatrix
+                for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                {
+                    argmax1(p00,Ksize,Kstride,po++,NoSimdMode());
+                }
+            }      
+            break;
+        case ModeParSimd:
+            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
+            {
+                argmax1_hor(p000,Asize,Ksize,Kstride,po,S(),iB);  // empty implementation for the other
+            }    
+            break;
+        case ModeParNoSimd:
+            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
+            {
+                argmax1_hor(p000,Asize,Ksize,Kstride,po,NoSimdMode(),iB);  // empty implementation for the other
+            }    
+            break;
+        case ModeAlongSimd:
+            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+            {
+                const Tin * p00 = p000; // begin of the submatrix
+                for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                {
+                    argmax1(p00,Ksize,Kstride,po++,S());
+                }
+            }       
+            break;
+        default:
+            break;
+    }
         
-    if(forcemode == ModeAlongNoSimd)
-    {
-        for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
-        {
-            const Tin * p00 = p000; // begin of the submatrix
-            for (int iA = 0; iA < Asize; iA++, p00 += Astride )
-            {
-                argmax1(p00,Ksize,Kstride,po++,NoSimdMode());
-            }
-        }        
-        return;
-    }
-    else if(forcemode == ModeAlongSimd)
-    {
-        for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
-        {
-            const Tin * p00 = p000; // begin of the submatrix
-            for (int iA = 0; iA < Asize; iA++, p00 += Astride )
-            {
-                argmax1(p00,Ksize,Kstride,po++,S());
-            }
-        }       
-        return;
-    }
-    #ifdef __AVX2__
-
-    if(forcemode == ModeParSimd || (Astride == 1  && Q::csize > 1 && Asize >= Q::csize)) // && Kstride > 128 ) // && Asize >= Q::csize) // at least 1 special iteration
-    {
-        for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
-        {
-            argmax1_hor(p000,Asize,Ksize,Kstride,po,S(),iB);  // empty implementation for the other
-        }    
-    }
-    else if(forcemode == ModeParNoSimd)
-    {
-        for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
-        {
-            argmax1_hor(p000,Asize,Ksize,Kstride,po,NoSimdMode(),iB);  // empty implementation for the other
-        }    
-    }
-    else
-    #endif
-//    #endif
-        
-    {
-        // Auto
-        for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
-        {
-            const Tin * p00 = p000; // begin of the submatrix
-            for (int iA = 0; iA < Asize; iA++, p00 += Astride )
-            {
-                argmax1(p00,Ksize,Kstride,po++,S());
-            }
-        }
-    }
 }
 
 #ifndef NOMATLAB
 
+template <class T>
+void mexinfo()
+{
+    typedef typename simdgen<T>::type Q;
+    typedef typename simdgen<T>::simdmarker S;
+    typedef typename Q::indextype QI;
+    mexPrintf("Type %s WrapperSIMD %-15s TypeSIMD %-10s Size %-2d Marker %-10s Index %-20s AlignmentSIMD %-2d AlignmenntIndex %-2d\n",
+            typeid(T).name(),typeid(Q).name(),typeid(typename Q::simdtype).name(),(int)Q::csize,typeid(S).name(),typeid(QI).name(),alignof(Q),alignof(QI));
+}
+
 // argmax(data,dim,sametypeindex)
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
+    if(nrhs == 0 && nlhs == 0)
+    {
+        mexPrintf("argmax SIMD Emanuele Ruffaldi 2017\n");
+        // for each type
+        mexinfo<float>();
+        mexinfo<double>();
+        mexinfo<int8_t>();
+        mexinfo<uint8_t>();
+        mexinfo<int16_t>();
+        mexinfo<uint16_t>();
+        mexinfo<int32_t>();
+        mexinfo<uint32_t>();
+        return;
+    }
     if(nrhs == 1 && nlhs == 0)
     {
-        forcemode = *(double*)mxGetPr(prhs[0]);
-        mexPrintf("argmax forcemode %d (0='auto',1='alongnosimd',2='parsimd',3='parnosimd',4='alongsimd',5='matlab') \n",forcemode);
+        forcemode = (RunningMode)*(double*)mxGetPr(prhs[0]);
+        mexPrintf("argmax forcemode %d (0='auto',1='alongnosimd',2='parsimd',3='parnosimd',4='alongsimd',5='matlab') \n",(int)forcemode);
         return;
     }
 	// indices
@@ -459,15 +541,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
 	}
        
-    if(forcemode == MoteMatlabMEX)
+    if(forcemode == ModeMatlabMEX)
     {
+        // [~y] = max(y,[],dim);
         if(dim != 0)
         {
             mxArray *mrhs[3], *mlhs[2];
             mrhs[0] = mxDuplicateArray(prhs[0]); // input
             mrhs[1] = mxCreateDoubleMatrix( 0, 0, mxREAL ); // []
             mrhs[2] = mxCreateDoubleScalar(dim); // dim
-            mexCallMATLAB(2, mlhs, 3, mrhs, "max"); // [~,y] = max(y,[],dim)
+            mexCallMATLAB(2, mlhs, 3, mrhs, "max"); 
             plhs[0] = mxDuplicateArray(mlhs[1]);
             mxDestroyArray(mlhs[0]);
             mxDestroyArray(mlhs[1]);
@@ -475,11 +558,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             mxDestroyArray(mrhs[1]);
             mxDestroyArray(mrhs[2]);
         }
+        // [~,y] = max(reshape(x,1,[]))
         else
         {
             mxArray *mrhs1[3], *mlhs1[1];
-            mxArray *mrhs2[1], *mlhs2[2];
-            // [~,y] = max(reshape(x,1,[]))
+            mxArray *mrhs2[1], *mlhs2[2];            
             mrhs1[0] = mxDuplicateArray(prhs[0]); // input duplication
             mrhs1[1] = mxCreateDoubleScalar(1); // 1
             mrhs1[2] = mxCreateDoubleMatrix( 0, 0, mxREAL ); // []
@@ -528,8 +611,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		return;
 	}
     
-    
-    
+       
 	mwSize dimo[10];
 	memset(dimo,0,sizeof(dimo));
 	if(ndims > sizeof(dimo)/sizeof(dimo[0]))
@@ -539,7 +621,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	}
 	int Asize,Bsize,Ksize,Astride,Kstride,Bstride;
 	
-    // scalar output => inner loop
+    // scalar output
 	if(dim == 0 || ndims == 1)
 	{
 		ondims = 1;
@@ -605,8 +687,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgTxt("cannot allocate output or read input data\n");
         return;
     }
-	const int offset = 0;
-   
+	#define offset 0    
     #define dualset(a,b) ((a)*100+b)
 	switch(dualset(mxGetClassID(prhs[0]),mxGetClassID(plhs[0])))
 	{
