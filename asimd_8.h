@@ -20,7 +20,7 @@ class simd_i8_64
 public:
     typedef int8_t type;
     typedef __m512i simdtype;
-    typedef simd_x_a<simd_i32_32,2> indextype; 
+    typedef simd_x_a<simd_i32_16,4> indextype; 
     typedef NoGather gathermode;
     typedef simd_i8_64 self;
     typedef __mmask64 cmpresult;
@@ -60,7 +60,11 @@ public:
 
     inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
     {
-        // __mmask64 => two integers vectors
+        // __mmask64 => four integers vectors
+        blendindex(oindex[0],other[0],(__mmask16)(mask >> 0));
+        blendindex(oindex[1],other[1],(__mmask16)(mask >> 16));
+        blendindex(oindex[2],other[2],(__mmask16)(mask >> 32));
+        blendindex(oindex[3],other[3],(__mmask16)(mask >> 48));
     }
 
     simdtype x;
@@ -75,7 +79,7 @@ class simd_u8_64
 public:
     typedef uint8_t type;
     typedef __m512i simdtype;
-    typedef simd_x_a<simd_i32_32,2> indextype; 
+    typedef simd_x_a<simd_i32_16,2> indextype; 
     typedef NoGather gathermode;
     typedef simd_u8_64 self;
     typedef __mmask64 cmpresult;
@@ -113,9 +117,13 @@ public:
         x = _mm512_mask_blendv_epi8(mask,x,other.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
+    static void blendindex(indextype & oindex, indextype other, cmpresult mask)
     {
         // __mmask64 => two integers vectors
+        blendindex(oindex[0],other[0],(__mmask16)(mask >> 0));
+        blendindex(oindex[1],other[1],(__mmask16)(mask >> 16));
+        blendindex(oindex[2],other[2],(__mmask16)(mask >> 32));
+        blendindex(oindex[3],other[3],(__mmask16)(mask >> 48));
     }
 
     simdtype x;
@@ -174,7 +182,7 @@ public:
         x = _mm256_blendv_epi8(x,other.x,mask.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+    static inline void blendindex(indextype & oindex, indextype other, self mask);
 
     simdtype x;
 };
@@ -227,7 +235,7 @@ public:
         x = _mm256_blendv_epi8(x,other.x,mask.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+   static inline void blendindex(indextype & oindex, indextype other, self mask);
 
     simdtype x;
 };

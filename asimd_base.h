@@ -203,7 +203,7 @@ public:
         load(a);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+   static inline void blendindex(indextype & oindex, indextype other, self mask);
 
    
     simdtype x;
@@ -291,10 +291,10 @@ public:
         load(a);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
+    static inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
     {
         for(int i = 0; i < N; i++)
-            x[i].blendindex(oindex[i],other[i],mask[i]);    
+            WT::blendindex(oindex[i],other[i],mask[i]);    
     }
 
     inline void blend(self & other, cmpresult mask)

@@ -54,7 +54,7 @@ public:
         x = _mm_blendv_pd(x,other.x,mask.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask)
+    static inline void blendindex(indextype & oindex, indextype other, self mask)
     {
     // letter=32bit 
     // AA BB => ABAB mm128
@@ -117,7 +117,7 @@ public:
         load(a);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask)
+    static inline void blendindex(indextype & oindex, indextype other, self mask)
     {
     // letter=32bit 
     // AA BB CC DD => ABCD ABCD (0 2 4 6 0 2 4 6) mm128
@@ -180,7 +180,7 @@ public:
         load(a);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
+    static inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
     {       
         oindex.x = _mm256_mask_blend_epi32(mask, oindex.x,other.x);
     }
@@ -275,7 +275,7 @@ public:
             x[i] = _mm256_blendv_pd(x[i],other.x[i],mask.x[i]);
     }
 
-    void blendindex(indextype & oindex, indextype other, self mask)
+    static void blendindex(indextype & oindex, indextype other, self mask)
     {
         __m256 mm = _mm256_setr_epi32(0,2,4,6,0,2,4,6);
         

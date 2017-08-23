@@ -57,7 +57,7 @@ public:
         x = _mm_blendv_ps(x,other.x,mask.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+    static inline void blendindex(indextype & oindex, indextype other, self mask);
 
     simdtype x;
 };
@@ -114,7 +114,7 @@ public:
         x = _mm256_blendv_ps(x,other.x,mask.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+    static inline void blendindex(indextype & oindex, indextype other, self mask);
 
     simdtype x;
 };
@@ -173,7 +173,7 @@ public:
         x = _mm512_mask_blend_ps(mask,x,other.x);
     }
 
-    inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
+    static inline void blendindex(indextype & oindex, indextype other, cmpresult mask)
     {
         oindex.x = _mm512_mask_blend_epi32(mask, oindex.x,other.x);
     }

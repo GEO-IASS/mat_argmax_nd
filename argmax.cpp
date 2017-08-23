@@ -121,7 +121,7 @@ void argmax1(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMo
             // index:
             //		update icurmax for all elements in which cmp is 1111 (typed as index)
            	curmax.blend(cur,cmp); // pick other if 1 at bit
-           	curmax.blendindex(icurmax,icur,cmp); // special for sizeof(T) != int32
+           	Q::blendindex(icurmax,icur,cmp); // special for sizeof(T) != int32
 
     	#ifdef NOMATLAB
             std::cout << "iteration iQK " << iQK << " other   is " << cur << std::endl;
@@ -348,7 +348,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
             cur.load(p0);
             typename Q::cmpresult cmp = curmax.cmplt(cur);
             curmax.blend(cur,cmp); 
-            curmax.blendindex(icurmax,icur,cmp); 
+            Q::blendindex(icurmax,icur,cmp); 
         }               
         // index already 1-based
 
@@ -387,7 +387,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
             cur.load(p0); // unsafe
             typename Q::cmpresult cmp = curmax.cmplt(cur);
             curmax.blend(cur,cmp); 
-            curmax.blendindex(icurmax,icur,cmp); 
+            Q::blendindex(icurmax,icur,cmp); 
         }               
         // index already 1-based
 
