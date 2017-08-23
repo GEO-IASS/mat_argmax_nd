@@ -18,6 +18,7 @@ public:
     typedef simd_i32_4 indextype;
     typedef WithGather gathermode;
     typedef simd_d_2 self;
+    typedef self cmpresult;
     enum { csize = 2 };
     
     inline simd_d_2() {}
@@ -29,7 +30,7 @@ public:
     inline void store(type * ptr) const { _mm_storeu_pd((type*)ptr,x); }
     
     inline self max(self & y) const { return self(_mm_max_pd(x,y.x)); }
-    inline self cmplt(self & y) const { return  self(_mm_cmplt_pd(x,y.x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm_cmplt_pd(x,y.x)); }
     inline void gather(const type * ptr, indextype idx) { x = _mm_i32gather_pd(ptr, idx.x, 1); }
     
     inline unsigned int size() const { return csize; }    
@@ -81,6 +82,7 @@ public:
     typedef simd_i32_4 indextype;
     typedef WithGather gathermode;
     typedef simd_d_4 self;
+    typedef self cmpresult;
     enum { csize = 4 };
     
     inline simd_d_4() {}
@@ -89,8 +91,8 @@ public:
     inline void load(const type * ptr) { x = _mm256_loadu_pd((const type*)ptr); }
     inline void store(type * ptr) const { _mm256_storeu_pd((type*)ptr,x); }
     
-    inline simd_d_4 max(simd_d_4 & y) const { return simd_d_4(_mm256_max_pd(x,y.x)); }
-    inline simd_d_4 cmplt(simd_d_4 & y) const { return  simd_d_4(_mm256_cmp_pd(x,y.x, 1 /* LT_OS */)); }
+    inline self max(self & y) const { return self(_mm256_max_pd(x,y.x)); }
+    inline cmpresult cmplt(simd_d_4 & y) const { return  cmpresult(_mm256_cmp_pd(x,y.x, 1 /* LT_OS */)); }
     
     inline void gather(const type * ptr, indextype idx) { x = _mm256_i32gather_pd(ptr, idx.x, 1); }
     inline unsigned int size() const { return csize; }    

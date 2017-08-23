@@ -19,6 +19,7 @@ public:
     typedef simd_i32_8 indextype; // in general simdgenn<int32,8>
     typedef NoGather gathermode;
     typedef simd_u16_8 self;
+    typedef self cmpresult;
     enum { csize = 8 };
     
     inline simd_u16_8() {}
@@ -27,7 +28,7 @@ public:
     inline void load(const type * ptr) { x = _mm_loadu_si128((const simdtype*)ptr); }
     inline void store(type * ptr) const { _mm_storeu_si128((simdtype*)ptr,x); }
     inline self max(self & y) const { return self(_mm_max_epu16(x,y.x)); }
-    inline self cmplt(self & y) const { return  self(_mm_cmplt_epu16(x,y.x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm_cmplt_epu16(x,y.x)); }
     inline unsigned int size() const { return csize; }    
 
     void initincrement(type x)
@@ -67,6 +68,7 @@ public:
     typedef simd_i32_8 indextype;
     typedef NoGather gathermode;
     typedef simd_i16_8 self;
+    typedef self cmpresult;
     enum { csize = 8 };
     
     inline simd_i16_8() {}
@@ -74,8 +76,8 @@ public:
     inline simd_i16_8(simdtype v) : x(v) {}
     inline void load(const type * ptr) { x = _mm_loadu_si128((const simdtype*)ptr); }
     inline void store(type * ptr) const { _mm_storeu_si128((simdtype*)ptr,x); }
-    inline simd_i16_8 max(simd_i16_8 & y) const { return simd_i16_8(_mm_max_epi16(x,y.x)); }
-    inline simd_i16_8 cmplt(simd_i16_8 & y) const { return  simd_i16_8(_mm_cmplt_epi16(x,y.x)); }
+    inline self max(self & y) const { return self(_mm_max_epi16(x,y.x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm_cmplt_epi16(x,y.x)); }
     inline unsigned int size() const { return csize; }    
 
     void initincrement(type x)
@@ -117,6 +119,7 @@ public:
     typedef simd_i32_8_a<2> indextype;
     typedef NoGather gathermode;
     typedef simd_i16_16 self;
+    typedef self cmpresult;
     enum { csize = 16 };
     
     inline simd_i16_16() {}
@@ -124,8 +127,8 @@ public:
     inline simd_i16_16(simdtype v) : x(v) {}
     inline void load(const type * ptr) { x = _mm256_loadu_si256((const simdtype*)ptr); }
     inline void store(type * ptr) const { _mm256_storeu_si256((simdtype*)ptr,x); }
-    inline simd_i16_16 max(simd_i16_16 & y) const { return simd_i16_16(_mm256_max_epi16(x,y.x)); }
-    inline simd_i16_16 cmplt(simd_i16_16 & y) const { return  simd_i16_16(_mm256_cmpgt_epi16(y.x,x)); }
+    inline self max(self & y) const { return self(_mm256_max_epi16(x,y.x)); }
+    inline cmpresult cmplt(simd_i16_16 & y) const { return  cmpresult(_mm256_cmpgt_epi16(y.x,x)); }
     inline unsigned int size() const { return csize; }    
 
     void initincrement(type x)
@@ -188,7 +191,7 @@ public:
     typedef simd_i32_8_a<2> indextype;
     typedef NoGather gathermode;
     typedef simd_u16_16 self;
-    typedef simd_u16_16 cmpresult;
+    typedef self cmpresult;
     enum { csize = 16 };
     
     inline simd_u16_16() {}

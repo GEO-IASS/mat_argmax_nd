@@ -324,11 +324,12 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
 template <class Tin, class Tout> 
 void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride,Tout * po,SimdMode, int ri)
 {
-    typedef typename simdgen<Tin>::type Q;
+    typedef typename simdgen<Tin>::type Qa;
     typedef typename simdgen<Tin>::simdmarker S;
+    typedef simd_x_a<Qa,16> Q;    
     const int steps = Asize/Q::csize; // truncation
     const int remainder = Asize%Q::csize;
-    typename Q::indextype::type tmpout[Q::indextype::csize]; // Q::indextype::csize >= Q::csize    
+    typename Qa::indextype::type tmpout[Q::csize]; // Q::indextype::csize >= Q::csize    
         
     // split Asize in slices of Q::csize
     for (int n = 0; n < steps; n++, p00 += Q::csize) // Astride*Q::csize
@@ -345,7 +346,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
         {
             Q cur;
             cur.load(p0);
-            Q cmp = curmax.cmplt(cur);
+            typename Q::cmpresult cmp = curmax.cmplt(cur);
             curmax.blend(cur,cmp); 
             curmax.blendindex(icurmax,icur,cmp); 
         }               
@@ -368,7 +369,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
             pgin[i] = i*sizeof(typename Q::type);
         for(; i < QI::csize; i++)
             pgin[i] = 0; 
-        pg.load(pgin);
+        pg.load(pgin); // TODO loadpart up to remainder
         
         const Tin * p0 = p00;
         typename Q::indextype icurmax(1); // first 1-based
@@ -384,14 +385,15 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
             Q cur;
             //cur.gather(p0,pg);
             cur.load(p0); // unsafe
-            Q cmp = curmax.cmplt(cur);
+            typename Q::cmpresult cmp = curmax.cmplt(cur);
             curmax.blend(cur,cmp); 
             curmax.blendindex(icurmax,icur,cmp); 
         }               
         // index already 1-based
 
         // now distribute the outputs by column
-        icurmax.store(tmpout); // 1-base
+        icurmax.store(tmpout); // 1-base  // TODO: remainder
+        
         for(int o = 0; o < remainder; o++) // only the ones needed, ignore the rest
             *po++ = (Tout)tmpout[o]; //  => if same type would be faster
         

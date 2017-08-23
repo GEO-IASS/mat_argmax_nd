@@ -210,19 +210,19 @@ public:
 };
 
 // array of wrapped types. 
-template <class T, int N>
+template <class WT, int N>
 class simd_x_a
 {
 public:
-    typedef  T basetype;
-    typedef typename T::type type;
-    typedef typename T::simdtype simdtype;
-    typedef std::array<typename T::cmpresult,N> cmpresult;
-    typedef std::array<T,N> contenttype;
-    typedef simd_x_a<typename T::indextype,N> indextype; // so we can perform ops over that
+    typedef WT basetype;
+    typedef typename WT::type type;
+    typedef typename WT::simdtype simdtype;
+    typedef std::array<typename WT::cmpresult,N> cmpresult; // combination of outputs
+    typedef std::array<WT,N> contenttype; // flattened items
+    typedef simd_x_a<typename WT::indextype,N> indextype; // so we can perform ops over that
     typedef simd_x_a self;
-    enum { csize = T::csize*N };
-    enum { isize = T::csize };  
+    enum { csize = WT::csize*N };
+    enum { isize = WT::csize };  
 
     simd_x_a()
     {

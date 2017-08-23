@@ -20,6 +20,7 @@ public:
     typedef simd_i32_4 indextype;
     typedef WithGather gathermode;
     typedef simd_i32_4 self;
+    typedef self cmpresult;
     enum { csize = 4 };
     
     inline simd_i32_4() {}
@@ -31,7 +32,7 @@ public:
     //inline void store(type * ptr) const { _mm_storeu_si128((simdtype*)ptr,x); }
     
     inline self max(self & y) const { return self(_mm_max_epi32(x,y.x)); }
-    inline self cmplt(self & y) const { return  self(_mm_cmplt_epi32(x,y.x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm_cmplt_epi32(x,y.x)); }
     inline void gather(const type * ptr, indextype idx) { x = _mm_i32gather_epi32(ptr, idx.x, 1); }
     
     inline unsigned int size() const { return csize; } 
@@ -78,6 +79,7 @@ public:
     typedef simd_i32_8 indextype;
     typedef WithGather gathermode;
     typedef simd_i32_8 self;
+    typedef self cmpresult;
     enum { csize = 8 };
     
     inline simd_i32_8() {}
@@ -87,7 +89,7 @@ public:
     inline void store(type * ptr) const { _mm256_storeu_si256((simdtype*)ptr,x); }
     
     inline self max(self & y) const { return self(_mm256_max_epi32(x,y.x)); }
-    inline self cmplt(self & y) const { return  self(_mm256_cmpgt_epi32(y.x,x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm256_cmpgt_epi32(y.x,x)); }
     inline void gather(const type * ptr, indextype idx) { x = _mm256_i32gather_epi32(ptr, idx.x, 1); }
     
     inline unsigned int size() const { return csize; }    
@@ -133,6 +135,7 @@ public:
     typedef simd_i32_8 indextype;
     typedef WithGather gathermode;
     typedef simd_u32_8 self;
+    typedef self cmpresult;
     enum { csize = 8 };
     
     inline simd_u32_8() {}
@@ -142,7 +145,7 @@ public:
     inline void store(type * ptr) const { _mm256_storeu_si256((simdtype*)ptr,x); }
     
     inline self max(self & y) const { return self(_mm256_max_epu32(x,y.x)); }
-    inline self cmplt(self & y) const { return  self(_mm256_cmpgt_epu32(y.x,x)); }
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm256_cmpgt_epu32(y.x,x)); }
     inline void gather(const type * ptr, indextype idx) { x = _mm256_i32gather_epi32(ptr, idx.x, 1); }
     
     inline unsigned int size() const { return csize; }    
@@ -255,6 +258,9 @@ public:
     typedef int32_t type;
     typedef __m256i basesimdtype;
     typedef __m256i simdtype[N];
+    typedef simd_i32_8_a self;
+    typedef self indextype;
+    typedef self cmpresult;
     enum { csize = 8*N };
     enum { isize = 8 };
     
