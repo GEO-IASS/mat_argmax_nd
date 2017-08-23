@@ -15,7 +15,7 @@ class simd_u16_8
 {
 public:
     typedef uint16_t type;
-    typedef __m128i simdtype;
+    typedef __m128i simdtype;    
     typedef simd_i32_8 indextype; // in general simdgenn<int32,8>
     typedef NoGather gathermode;
     typedef simd_u16_8 self;
@@ -116,10 +116,18 @@ class simd_i16_16
 public:
     typedef int16_t type;
     typedef __m256i simdtype;
+#ifdef WITH_AVX512VLBW
+    typedef simd_i32_16 indextype;
+#else
     typedef simd_i32_8_a<2> indextype;
+#endif
     typedef NoGather gathermode;
     typedef simd_i16_16 self;
+#ifdef WITH_AVX512VLBW
+    typedef __mask16 cmpresult;
+#else
     typedef self cmpresult;
+#endif
     enum { csize = 16 };
     
     inline simd_i16_16() {}
@@ -128,7 +136,12 @@ public:
     inline void load(const type * ptr) { x = _mm256_loadu_si256((const simdtype*)ptr); }
     inline void store(type * ptr) const { _mm256_storeu_si256((simdtype*)ptr,x); }
     inline self max(self & y) const { return self(_mm256_max_epi16(x,y.x)); }
-    inline cmpresult cmplt(simd_i16_16 & y) const { return  cmpresult(_mm256_cmpgt_epi16(y.x,x)); }
+    
+#ifdef WITH_AVX512VLBW
+    inline cmpresult cmplt(self & y) const { return _mm256_cmp_epi16_mask(x,y.x,1); }
+#else    
+    inline cmpresult cmplt(self & y) const { return  cmpresult(_mm256_cmpgt_epi16(y.x,x)); }
+#endif
     inline unsigned int size() const { return csize; }    
 
     void initincrement(type x)
@@ -148,12 +161,16 @@ public:
     } 
     */   
 
-    inline void blend(self & other, self mask)
+    inline void blend(self & other, cmpresult mask)
     {
+#ifdef WITH_AVX512VLBW        
+        x = _mm256_mask_blend_epi16(x,other.x,mask);
+#else        
         x = _mm256_blendv_epi8(x,other.x,mask.x);
+#endif   
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+    inline void blendindex(indextype & oindex, indextype other, cmpresult mask);
 
     simdtype x;
 
@@ -162,8 +179,11 @@ public:
 
 
 // from 1 _mm256 8bit to 4 _mm256 32bit
-inline void simd_i16_16::blendindex(indextype & oindex, indextype other, self mask)
+inline void simd_i16_16::blendindex(indextype & oindex, indextype other, cmpresult mask)
 {
+#ifdef WITH_AVX512VLBW
+    simd_i32_16::blendindex(oindex,other,mask);
+#else
     // mask = 8 items 32bit = A B C D E F G H each expresses the status of 2 input variables
     //
     __m128i cur = _mm256_castsi256_si128(mask.x);
@@ -180,6 +200,7 @@ inline void simd_i16_16::blendindex(indextype & oindex, indextype other, self ma
 
     oindex.x[0] = _mm256_blendv_ps(oindex.x[0],other.x[0],mask0);
     oindex.x[1] = _mm256_blendv_ps(oindex.x[1],other.x[1],mask1);
+#endif    
 }
 
 
@@ -188,10 +209,18 @@ class simd_u16_16
 public:
     typedef uint16_t type;
     typedef __m256i simdtype;
+#ifdef WITH_AVX512VLBW
+    typedef simd_i32_16 indextype;
+#else
     typedef simd_i32_8_a<2> indextype;
+#endif
     typedef NoGather gathermode;
     typedef simd_u16_16 self;
+#ifdef WITH_AVX512VLBW
+    typedef __mask16 cmpresult;
+#else
     typedef self cmpresult;
+#endif
     enum { csize = 16 };
     
     inline simd_u16_16() {}
@@ -201,8 +230,11 @@ public:
     inline void store(type * ptr) const { _mm256_storeu_si256((simdtype*)ptr,x); }
     inline self max(self & y) const { return self(_mm256_max_epu16(x,y.x)); }
 
-    // AVX512VL+AVX512BW _mm256_cmpgt_epu16_mask
+#ifdef WITH_AVX512VLBW
+    inline cmpresult cmplt(self & y) const { return _mm256_cmpgt_epu16_mask(x,y.x,1); }
+#else    
     inline cmpresult cmplt(self & y) const { return  self(_mm256_cmpgt_epu16(y.x,x)); }
+#endif
     inline unsigned int size() const { return csize; }    
 
     void initincrement(type x)
@@ -222,12 +254,16 @@ public:
     } 
     */   
 
-    inline void blend(self & other, self mask)
+    inline void blend(self & other, cmpresult mask)
     {
+#ifdef WITH_AVX512VLBW        
+        x = _mm256_mask_blend_epi16(x,other.x,mask);
+#else        
         x = _mm256_blendv_epi8(x,other.x,mask.x);
+#endif        
     }
 
-    inline void blendindex(indextype & oindex, indextype other, self mask);
+    inline void blendindex(indextype & oindex, indextype other, cmpresult mask);
 
     simdtype x;
 
@@ -236,8 +272,11 @@ public:
 
 
 // from 1 _mm256 8bit to 4 _mm256 32bit
-inline void simd_u16_16::blendindex(indextype & oindex, indextype other, self mask)
+inline void simd_u16_16::blendindex(indextype & oindex, indextype other, cmpresult mask)
 {
+#ifdef WITH_AVX512VLBW
+    simd_i32_16::blendindex(oindex,other,mask);
+#else
     // mask = 8 items 32bit = A B C D E F G H each expresses the status of 2 input variables
     //
     __m128i cur = _mm256_castsi256_si128(mask.x);
@@ -254,6 +293,7 @@ inline void simd_u16_16::blendindex(indextype & oindex, indextype other, self ma
 
     oindex.x[0] = _mm256_blendv_ps(oindex.x[0],other.x[0],mask0);
     oindex.x[1] = _mm256_blendv_ps(oindex.x[1],other.x[1],mask1);
+#endif
 }
 
 #endif
