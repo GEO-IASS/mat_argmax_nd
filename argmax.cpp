@@ -97,6 +97,7 @@ void argmax1(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMo
 	    // take 0 as current maximum
 	    icurmax.initincrement(1); // 0..C
 	    icur = icurmax;
+        _mm_prefetch(p0+Kstride*Q::csize,1);
         loadstrided(curmax,p0,Kstride,pg); 
 
         #ifdef NOMATLAB
@@ -113,6 +114,7 @@ void argmax1(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMo
         #endif
         for(int iQK = 1; iQK < Ksize/Q::csize; iQK++, p0 += Kstride*Q::csize,icur += icurinc)
         {
+            _mm_prefetch(p0+Kstride*Q::csize,1);
             loadstrided(cur,p0,Kstride,pg);
             auto cmp = curmax.cmplt(cur); // curmax >= cur 
 
@@ -344,6 +346,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
 
         for(int iK = 1; iK < Ksize; iK++, p0 += Kstride, icur += inccur) // Kstride
         {
+            _mm_prefetch(p0+Kstride,1);
             Q cur;
             cur.load(p0);
             typename Q::cmpresult cmp = curmax.cmplt(cur);
@@ -383,6 +386,7 @@ void argmax1_hor(const Tin*p00,const int Asize,const int Ksize,const int Kstride
         for(int iK = 1; iK < Ksize; iK++, p0 += Kstride, icur += inccur) // Kstride
         {
             Q cur;
+            _mm_prefetch(p0+Kstride,1);
             //cur.gather(p0,pg);
             cur.load(p0); // unsafe
             typename Q::cmpresult cmp = curmax.cmplt(cur);
