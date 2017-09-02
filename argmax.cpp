@@ -71,7 +71,7 @@ public:
 
 #ifdef __AVX2__
 template <class T, class Tout>
-void argmax1(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMode)
+void argmax1_along(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMode)
 {
 	const T * p00 = p0;
     typedef typename simdgen<T>::type Q; // simd_X_size
@@ -181,10 +181,108 @@ void argmax1(const T * p0, const int Ksize, const int Kstride, Tout * po, SimdMo
     // emit
     *po = ((Tout)imax)+1; 
 }
+
+template <class T, class Tout>
+void argmax1_along_fit(const T * p0, const int Ksize, Tout * po, SimdMode)
+{
+	const T * p00 = p0;
+    typedef typename simdgen<T>::type Q; // simd_X_size
+    typedef typename Q::indextype QI;
+    int iK = 0; // index first in steps of C then full
+    T xmax; // max for final part
+    int imax; // imax for final part
+
+    if(Ksize >= Q::csize)
+    {
+	    Q curmax; // current maximum, initially the first C
+	    Q cur; // current value
+	    QI icur;
+	    QI icurmax; // maximum indices    
+	    QI icurinc(Q::csize); // increment
+
+	    // take 0 as current maximum
+	    icurmax.initincrement(1); // 0..C
+	    icur = icurmax;
+        _mm_prefetch(p0+Q::csize,1);
+        curmax.load(p0);
+
+        // start from 1
+        p0 += Q::csize;
+	    icur += icurinc;
+
+        for(int iQK = 1; iQK < Ksize/Q::csize; iQK++, p0 += Q::csize,icur += icurinc)
+        {
+            _mm_prefetch(p0+Q::csize,1);
+            cur.load(p0);
+            auto cmp = curmax.cmplt(cur); // curmax >= cur 
+
+            // maximum:
+            // 		update curmax for all elements in which cmp is 1111
+            // index:
+            //		update icurmax for all elements in which cmp is 1111 (typed as index)
+           	curmax.blend(cur,cmp); // pick other if 1 at bit
+           	Q::blendindex(icurmax,icur,cmp); // special for sizeof(T) != int32
+
+    	#ifdef NOMATLAB
+            std::cout << "iteration iQK " << iQK << " other   is " << cur << std::endl;
+            std::cout << "iteration iQK " << iQK << " iother  is " << icur << std::endl;
+            std::cout << "iteration iQK " << iQK << " cmp     is " << cmp << std::endl;
+            std::cout << "iteration iQK " << iQK << " newmax  is " << curmax << std::endl;
+            std::cout << "iteration iQK " << iQK << " inewmax is " << icurmax << std::endl;
+            #endif
+        }
+        // p0 is already at last aligned
+
+    	#ifdef NOMATLAB
+            std::cout << "outloop  " << " curmax  is " << curmax << " and " << icurmax << std::endl;
+    	#endif
+
+        // horizontally find the maximum
+        // NOTE: for large parallel entities: e.g. i8 or i16 we could employ more parallelism here
+
+        T final[Q::csize];
+        int finali[QI::csize];
+        curmax.store(final);
+        icurmax.store(finali);
+
+
+        xmax = final[0];
+        imax = finali[0];
+        for(int i = 1; i < Q::csize; i++)
+        {        
+            if(final[i] > xmax)
+            {
+                xmax = final[i];
+                imax = finali[i];
+            }
+        }
+	    iK = p0-p00; // Ksize/Q::csize; // starting is truncated
+    }
+    else
+    {
+    	iK = 1;
+        imax = 0;
+        xmax = p0[0];
+        p0++;
+    }
+
+    // not aligned mode
+    for(; iK < Ksize; iK++, p0++)
+    {
+        if(*p0 > xmax)
+        {
+            xmax = *p0;
+            imax = iK;
+        }
+    }
+
+    // emit
+    *po = ((Tout)imax)+1; 
+}
 #endif
 
 template <class Tin, class Tout>
-void argmax1(const Tin * p0, int Ksize, int Kstride, Tout * po, NoSimdMode)
+void argmax1_along(const Tin * p0, int Ksize, int Kstride, Tout * po, NoSimdMode)
 {
     int imax = 0;
     Tin b = p0[0]; 
@@ -201,6 +299,11 @@ void argmax1(const Tin * p0, int Ksize, int Kstride, Tout * po, NoSimdMode)
     *po = ((Tout)imax)+1; 
 }
 
+template <class Tin, class Tout>
+void argmax1_along_fit(const Tin * p0, int Ksize, Tout * po, NoSimdMode)
+{
+    argmax1_along(p0,Ksize,1,po,NoSimdMode());
+}
 // unrolling of size Q
 template <class Tin, class Tout, int Q>
 void argmax1g(const Tin * p0, int Ksize, int Kstride, Tout * po, NoSimdMode)
@@ -426,6 +529,17 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
                     argmax1_hor(p000,Asize,Ksize,Kstride,po,S(),iB);  // empty implementation for the other
                 }                    
             }
+            else if(Kstride == 1)
+            {
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+                {
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1_along_fit(p00,Ksize,po++,S());
+                    }
+                }                       
+            }
             else
             {
                 for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
@@ -433,20 +547,34 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
                     const Tin * p00 = p000; // begin of the submatrix
                     for (int iA = 0; iA < Asize; iA++, p00 += Astride )
                     {
-                        argmax1(p00,Ksize,Kstride,po++,S());
+                        argmax1_along(p00,Ksize,Kstride,po++,S());
                     }
                 }                       
             }
             break;
         case ModeAlongNoSimd:
-            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+            if(Kstride == 1)
             {
-                const Tin * p00 = p000; // begin of the submatrix
-                for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
                 {
-                    argmax1(p00,Ksize,Kstride,po++,NoSimdMode());
-                }
-            }      
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1_along_fit(p00,Ksize,po++,NoSimdMode());
+                    }
+                }      
+            }
+            else
+            {
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+                {
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1_along(p00,Ksize,Kstride,po++,NoSimdMode());
+                    }
+                }      
+            }
             break;
         case ModeParSimd:
             for(int iB = 0; iB < Bsize; iB++, p000 += Bstride, po += Asize)
@@ -461,14 +589,28 @@ void argmax(const Tin * p000, int Asize, int Ksize, int Bsize, int Astride, int 
             }    
             break;
         case ModeAlongSimd:
-            for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+            if(Kstride == 1)
             {
-                const Tin * p00 = p000; // begin of the submatrix
-                for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
                 {
-                    argmax1(p00,Ksize,Kstride,po++,S());
-                }
-            }       
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1_along(p00,Ksize,Kstride,po++,S());
+                    }
+                }       
+            }
+            else
+            {
+                for(int iB = 0; iB < Bsize; iB++, p000 += Bstride)
+                {
+                    const Tin * p00 = p000; // begin of the submatrix
+                    for (int iA = 0; iA < Asize; iA++, p00 += Astride )
+                    {
+                        argmax1_along_fit(p00,Ksize,po++,S());
+                    }
+                }       
+            }
             break;
         default:
             break;
